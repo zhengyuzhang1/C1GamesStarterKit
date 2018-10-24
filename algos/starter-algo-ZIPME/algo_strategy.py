@@ -67,7 +67,7 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         self.enemyPrevHealth = game_state.enemy_health
 
-        self.starter-algo(game_state)        
+        self.starter_algo(game_state)        
 
         self.enemyCurrHealth = game_state.enemy_health
         
@@ -170,12 +170,17 @@ class AlgoStrategy(gamelib.AlgoCore):
         if game_state.can_spawn(firewall, position):
             game_state.attempt_spawn(firewall, position)
 
-    def starter-algo(self, game_state):
-
+    def starter_algo(self, game_state):
+        
+        
         destructors_positions_l1 = [[ 0, 13],[ 1, 12],[ 2, 11],[ 3, 10]]
 
         destructors_positions_l2 = [[ 1, 13],[ 2, 12],[ 3, 11],[ 4, 10]]
 
+        for player in [0,1]:
+            gamelib.debug_write('Defense line for player {} is:\n'.format(player), game_state.get_front_defense_line(0))
+            gamelib.debug_write('Opening for player {} is:\n'.format(player), game_state.get_openings(0))
+        
         for position in destructors_positions_l1:
             self.restoreFirewall(game_state, DESTRUCTOR, position)
 
@@ -199,7 +204,7 @@ class AlgoStrategy(gamelib.AlgoCore):
             if game_state.can_spawn(EMP, EMP_position, game_state.number_affordable(EMP)):
                 game_state.attempt_spawn(EMP, EMP_position, game_state.number_affordable(EMP))        
 
-    def starter-algo_initialSetup(self, game_state):
+    def starter_algo_initialSetup(self, game_state):
 
         destructors_positions_l0 = [[ 7, 10], [ 21, 10], [14, 10], [0, 13], [27, 13]]
 

@@ -1,6 +1,8 @@
 import math
 import json
 import warnings
+import queue
+import gamelib
 
 from .navigation import ShortestPathFinder
 from .util import send_command, debug_write
@@ -155,6 +157,60 @@ class GameState:
     def _invalid_unit(self, unit):
         warnings.warn("Invalid unit {}".format(unit))
 
+    #added by zzy
+    def get_front_defense_line(self, player_index = 1):
+        dist = [[float('inf')] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        from_which = [[None] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        visited = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        start = (0, self.HALF_ARENA - 1 + player_index)
+        end = (self.ARENA_SIZE - 1, self.HALF_ARENA - 1 + player_index)
+        visited = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        distance = 0
+        if not self.contains_stationary_unit(start):
+            distance += 1
+        dist[start[0]][start[1]] = distance
+        layer = [queue.Queue() for _ in range(self.ARENA_SIZE+1)]
+        layer[distance].put(start)
+        flag_done = False
+        while not flag_done:
+            while not layer[distance].empty():
+                x, y = layer[distance].get()
+                if visited[x][y]:
+                    continue
+                visited[x][y] = True
+                if (x, y) == end:
+                    flag_done = True
+                    break
+                for dx, dy in [(1,0),(1,1),(1,-1),(0,1),(0,-1),(-1,1),(-1,-1),(-1,0)]:
+                    x2, y2 = x + dx, y + dy
+                    if not self.game_map.in_arena_bounds((x2,y2)):
+                        continue
+                    if player_index == 1 and y2 < self.HALF_ARENA or player_index == 0 and y2 >= self.HALF_ARENA:
+                        continue
+                    if visited[x2][y2]:
+                        continue
+                    distance2 = distance
+                    #gamelib.debug_write('{},{} distance:{}\n'.format(x2,y2,distance2))
+                    if not self.contains_stationary_unit((x2,y2)):
+                        distance2 += 1
+                    if distance2 < dist[x2][y2]:
+                        dist[x2][y2] = distance2
+                        from_which[x2][y2] = x, y
+                    layer[distance2].put((x2, y2))                   
+            distance += 1
+        line = []
+        p = end
+        line.append(p)
+        while p != start:
+            p = from_which[p[0]][p[1]]
+            line.append(p)
+        return line
+            
+    #added by zzy
+    def get_openings(self, player_index = 1):
+        defense_line = self.get_front_defense_line(player_index)
+        return list(filter(lambda x: not self.contains_stationary_unit(x), defense_line))
+    
     def submit_turn(self):
         """Submit and end your turn.
         Must be called at the end of your turn or the algo will hang.
