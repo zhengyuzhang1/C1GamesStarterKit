@@ -170,6 +170,25 @@ class AlgoStrategy(gamelib.AlgoCore):
         if game_state.can_spawn(firewall, position):
             game_state.attempt_spawn(firewall, position)
 
+
+    def remove_unattacked_firewall(self, game_state, N_terms, locations):
+        for location in locations:
+            if location[1] >= game_state.HALF_ARENA:
+                warnings.warn("Could not remove a unit from {}. Location is enemy territory.".format(location))
+                continue
+            if not game_state.contains_stationary_unit(location):
+                warnings.warn("Could not remove a unit from {}. Location has no firewall.".format(location))
+                continue
+                #current life of firewall on location:
+            unit = game_state.game_map[location[0], location[1]][0]:
+            if unit.stability == unit.max_stability:
+                unit.last_attack_round += 1
+            else
+                unit.last_attack_round = 0
+            if unit.last_attack_round == N_terms:
+                game_state.attempt_remove(location)
+
+
     def starter-algo(self, game_state):
 
         destructors_positions_l1 = [[ 0, 13],[ 1, 12],[ 2, 11],[ 3, 10]]

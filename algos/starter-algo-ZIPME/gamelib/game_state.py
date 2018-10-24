@@ -97,7 +97,7 @@ class GameState:
         self.turn_number = int(turn_info[1])
 
         p1_health, p1_cores, p1_bits, p1_time = map(float, state["p1Stats"][:4])
-        p2_health, p2_cores, p2_bits, p2_time = map(float, state["p2Stats"][:4])
+        tp2_health, p2_cores, p2_bits, p2_time = map(float, state["p2Stats"][:4])
 
         self.my_health = p1_health
         self.my_time = p1_time
