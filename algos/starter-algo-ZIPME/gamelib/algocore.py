@@ -31,6 +31,10 @@ class AlgoCore(object):
         send_command("")
         send_command("")
 
+    def parse_action_phase(self, game_state):
+
+        self.game_state = game_state
+
     # only override this function if you have a 
     def start(self):
         """ 
@@ -63,7 +67,7 @@ class AlgoCore(object):
                     """
                     If stateType == 1, this game_state_string string represents the results of an action phase
                     """
-                    continue
+                    self.parse_action_phase(game_state_string)
                 elif stateType == 2:
                     """
                     This is the end game message. This means the game is over so break and finish the program.

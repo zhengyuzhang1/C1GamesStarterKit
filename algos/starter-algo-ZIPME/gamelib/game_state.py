@@ -90,6 +90,9 @@ class GameState:
         """
         state = json.loads(state_line)
 
+        self.breach_info = state["events"]["breach"]
+        self.p2_info = state["p2Units"]
+
         turn_info = state["turnInfo"]
         self.turn_number = int(turn_info[1])
 
@@ -124,7 +127,10 @@ class GameState:
                 hp = float(shp)
                 # This depends on RM always being the last type to be processed
                 if unit_type == REMOVE:
-                    self.game_map[x,y][0].pending_removal = True
+                    try:
+                        self.game_map[x,y][0].pending_removal = True
+                    except:
+                        print("Error! Program tried to die while parsing REMOVE unit")
                 unit = GameUnit(unit_type, self.config, player_number, hp, x, y)
                 self.game_map[x,y].append(unit)
 

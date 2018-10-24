@@ -2,6 +2,7 @@ import gamelib
 import random
 import math
 import warnings
+import json
 from sys import maxsize
 
 """
@@ -26,6 +27,18 @@ class AlgoStrategy(gamelib.AlgoCore):
         super().__init__()
         random.seed()
 
+        self.EMP_COUNT = 2
+        self.HALF_MAP = 14
+        self.breach_x = -1
+        self.breach_y = -1
+        self.UNIT_TYPE = -1
+        self.ENEMY_HEALTH_CONSTANT_COUNT = 0
+        self.EMP_COUNT = 1
+        self.dic = {}
+        self.info_from_p2 = {}
+        self.enemy_removed_units = []
+        self.enemy_removed_units_dict = {}
+
     def on_game_start(self, config):
         """ 
         Read in config and perform any initial setup here 
@@ -40,7 +53,6 @@ class AlgoStrategy(gamelib.AlgoCore):
         EMP = config["unitInformation"][4]["shorthand"]
         SCRAMBLER = config["unitInformation"][5]["shorthand"]
 
-
     def on_turn(self, turn_state):
         """
         This function is called every turn with the game state wrapper as
@@ -51,180 +63,157 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         game_state = gamelib.GameState(self.config, turn_state)
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
-        #game_state.suppress_warnings(True)  #Uncomment this line to suppress warnings.
+        # game_state.suppress_warnings(True)  # Uncomment this line to suppress warnings.        
 
-        self.starter_strategy(game_state)
+        self.enemyPrevHealth = game_state.enemy_health
 
+        self.starter-algo(game_state)        
+
+        self.enemyCurrHealth = game_state.enemy_health
+        
         game_state.submit_turn()
 
-    """
-    NOTE: All the methods after this point are part of the sample starter-algo
-    strategy and can safey be replaced for your custom algo.
-    """
-    def starter_strategy(self, game_state):
+    def parse_action_phase(self, turn_state):
         """
-        Build the C1 logo. Calling this method first prioritises
-        resources to build and repair the logo before spending them 
-        on anything else.
+        This function is called every turn in game state wrapper as an argument.
+        It records game_state from previous rounds. The first part records 
+        breach_info, i.e., location damaged by enemy's information unit.
+        The second part records firewalls removed by enemy.
         """
-        self.build_c1_logo(game_state)
+        game_state = gamelib.GameState(self.config, turn_state)
 
-        """
-        Then build additional defenses.
-        """
-        self.build_defences(game_state)
+        # First part
+        if len(game_state.breach_info) > 0 and game_state.breach_info[0][0][1] < self.HALF_MAP:
+            self.breach_x = game_state.breach_info[0][0][0]
+            self.breach_y = game_state.breach_info[0][0][1]            
+            self.UNIT_TYPE = game_state.breach_info[0][2]
+            gamelib.debug_write('Location [{0}, {1}] is under attack!'.format(self.breach_x, self.breach_y))    
+        else:
+            self.breach_x = -1
+            self.breach_y = -1
 
-        """
-        Finally deploy our information units to attack.
-        """
-        self.deploy_attackers(game_state)
+        # Second part
+        if len(game_state.p2_info[6]) > 0:
+            if self.enemy_removed_units != game_state.p2_info[6]:
+                self.enemy_removed_units = game_state.p2_info[6]
+                gamelib.debug_write('Firewalls removed are: {}'.format(self.enemy_removed_units))
+        else:
+            self.info_from_p2 = []
 
-    # Here we make the C1 Logo!
-    def build_c1_logo(self, game_state):
+    def check_firewall_pattern(self, game_state):
         """
-        We use Filter firewalls because they are cheap
+        This function is called in the main(). It detects the
+        firewalls removed by enemy every turn
+        """
+        for each_firewall in self.enemy_removed_units:
+            self.check_firewall_pattern_helper(game_state, each_firewall[1], each_firewall[0])
 
-        First, we build the letter C.
-        """
-        firewall_locations = [[8, 11], [9, 11], [7,10], [7, 9], [7, 8], [8, 7], [9, 7]]
-        for location in firewall_locations:
-            if game_state.can_spawn(FILTER, location):
-                game_state.attempt_spawn(FILTER, location)
+    def check_firewall_pattern_helper(self, game_state, row, col):
+        temp = ()
+        temp = temp + (col,)
+        temp = temp + (row,)
         
-        """
-        Build the number 1.
-        """
-        firewall_locations = [[17, 11], [18, 11], [18, 10], [18, 9], [18, 8], [17, 7], [18, 7], [19,7]]
-        for location in firewall_locations:
-            if game_state.can_spawn(FILTER, location):
-                game_state.attempt_spawn(FILTER, location)
+        if temp in self.enemy_removed_units_dict.keys():
+            self.enemy_removed_units_dict[temp] += 1
+        else:
+            self.enemy_removed_units_dict[temp] = 1
 
-        """
-        Build 3 dots with destructors so it looks neat.
-        """
-        firewall_locations = [[11, 7], [13, 9], [15, 11]]
-        for location in firewall_locations:
-            if game_state.can_spawn(DESTRUCTOR, location):
-                game_state.attempt_spawn(DESTRUCTOR, location)
+        # if self.enemy_removed_units_dict[temp] >= 3:
+            # gamelib.debug_write('Enemy has removed {0} for {1} times'.format(self.enemy_removed_units_dict[temp], self.enemy_removed_units_dict[temp]))
 
-    def build_defences(self, game_state):
-        """
-        First lets protect ourselves a little with destructors:
-        """
-        firewall_locations = [[0, 13], [27, 13]]
-        for location in firewall_locations:
-            if game_state.can_spawn(DESTRUCTOR, location):
-                game_state.attempt_spawn(DESTRUCTOR, location)
+        for key, value in self.enemy_removed_units_dict.items():
+            if value >= 3:
+                gamelib.debug_write('Enemy has removed {0} for {1} times'.format(key, value))
 
-        """
-        Then lets boost our offense by building some encryptors to shield 
-        our information units. Lets put them near the front because the 
-        shields decay over time, so shields closer to the action 
-        are more effective.
-        """
-        firewall_locations = [[3, 11], [4, 11], [5, 11]]
-        for location in firewall_locations:
-            if game_state.can_spawn(ENCRYPTOR, location):
-                game_state.attempt_spawn(ENCRYPTOR, location)
-
-        """
-        Lastly lets build encryptors in random locations. Normally building 
-        randomly is a bad idea but we'll leave it to you to figure out better 
-        strategies. 
-
-        First we get all locations on the bottom half of the map
-        that are in the arena bounds.
-        """
-        all_locations = []
-        for i in range(game_state.ARENA_SIZE):
-            for j in range(math.floor(game_state.ARENA_SIZE / 2)):
-                if (game_state.game_map.in_arena_bounds([i, j])):
-                    all_locations.append([i, j])
-        
-        """
-        Then we remove locations already occupied.
-        """
-        possible_locations = self.filter_blocked_locations(all_locations, game_state)
-
-        """
-        While we have cores to spend, build a random Encryptor.
-        """
-        while game_state.get_resource(game_state.CORES) >= game_state.type_cost(ENCRYPTOR) and len(possible_locations) > 0:
-            # Choose a random location.
-            location_index = random.randint(0, len(possible_locations) - 1)
-            build_location = possible_locations[location_index]
-            """
-            Build it and remove the location since you can't place two 
-            firewalls in the same location.
-            """
-            game_state.attempt_spawn(ENCRYPTOR, build_location)
-            possible_locations.remove(build_location)
-
-    def deploy_attackers(self, game_state):
-        """
-        First lets check if we have 10 bits, if we don't we lets wait for 
-        a turn where we do.
-        """
-        if (game_state.get_resource(game_state.BITS) < 10):
+    def record_damage(self, game_state, row, col):
+        if row == -1 or col == -1:
             return
-        
-        """
-        First lets deploy an EMP long range unit to destroy firewalls for us.
-        """
-        if game_state.can_spawn(EMP, [3, 10]):
-            game_state.attempt_spawn(EMP, [3, 10])
-
-        """
-        Now lets send out 3 Pings to hopefully score, we can spawn multiple 
-        information units in the same location.
-        """
-        if game_state.can_spawn(PING, [14, 0], 3):
-            game_state.attempt_spawn(PING, [14,0], 3)
-
-        """
-        NOTE: the locations we used above to spawn information units may become 
-        blocked by our own firewalls. We'll leave it to you to fix that issue 
-        yourselves.
-
-        Lastly lets send out Scramblers to help destroy enemy information units.
-        A complex algo would predict where the enemy is going to send units and 
-        develop its strategy around that. But this algo is simple so lets just 
-        send out scramblers in random locations and hope for the best.
-
-        Firstly information units can only deploy on our edges. So lets get a 
-        list of those locations.
-        """
-        friendly_edges = game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_RIGHT)
-        
-        """
-        Remove locations that are blocked by our own firewalls since we can't 
-        deploy units there.
-        """
-        deploy_locations = self.filter_blocked_locations(friendly_edges, game_state)
-        
-        """
-        While we have remaining bits to spend lets send out scramblers randomly.
-        """
-        while game_state.get_resource(game_state.BITS) >= game_state.type_cost(SCRAMBLER) and len(deploy_locations) > 0:
-           
-            """
-            Choose a random deploy location.
-            """
-            deploy_index = random.randint(0, len(deploy_locations) - 1)
-            deploy_location = deploy_locations[deploy_index]
             
-            game_state.attempt_spawn(SCRAMBLER, deploy_location)
-            """
-            We don't have to remove the location since multiple information 
-            units can occupy the same space.
-            """
+        temp = ()
+        temp = temp + (col,)
+        temp = temp + (row,)
         
-    def filter_blocked_locations(self, locations, game_state):
-        filtered = []
-        for location in locations:
-            if not game_state.contains_stationary_unit(location):
-                filtered.append(location)
-        return filtered
+        if temp in self.dic.keys():
+            self.dic[temp] += 1
+        else:
+            self.dic[temp] = 1
+
+        if self.dic[temp] >= 3:
+            gamelib.debug_write('Printing dic...\n {}'.format(self.dic))
+            self.time_for_action(game_state, row, col)
+
+    def time_for_action(self, game_state, row, col):
+        for pos in self.damaged_neighbors(game_state, row, col): 
+            gamelib.debug_write('neighbor is: [{0}, {1}]'.format(pos[0], pos[1]))   
+            self.restoreFirewall(game_state, DESTRUCTOR, pos)
+
+    def damaged_neighbors(self, game_state, row, col):
+        o_clock_9 = []        
+        o_clock_9.append(col + 1)
+        o_clock_9.append(row - 1)
+
+        o_clock_3 = []        
+        o_clock_3.append(col - 1)
+        o_clock_3.append(row + 1)
+        
+        o_clock_1 = []        
+        o_clock_1.append(col + 1)
+        o_clock_1.append(row)
+
+        o_clock_10 = []        
+        o_clock_10.append(col)
+        o_clock_10.append(row + 1)
+
+        return o_clock_9, o_clock_3, o_clock_1, o_clock_10
+
+    def restoreFirewall(self, game_state, firewall, position):
+        if game_state.can_spawn(firewall, position):
+            game_state.attempt_spawn(firewall, position)
+
+    def starter-algo(self, game_state):
+
+        destructors_positions_l1 = [[ 0, 13],[ 1, 12],[ 2, 11],[ 3, 10]]
+
+        destructors_positions_l2 = [[ 1, 13],[ 2, 12],[ 3, 11],[ 4, 10]]
+
+        for position in destructors_positions_l1:
+            self.restoreFirewall(game_state, DESTRUCTOR, position)
+
+        for position in destructors_positions_l2:
+            self.restoreFirewall(game_state, DESTRUCTOR, position)
+
+        self.check_firewall_pattern(game_state)
+
+        # get EMP's position
+        EMP_position = [ 14, 0]
+
+        # get ping's position
+        pings_position = [ 14, 0]
+
+        while (game_state.number_affordable(EMP) > 0):
+            # if EMP damanges opponent, summon ping
+            if game_state.turn_number and self.enemyCurrHealth != self.enemyPrevHealth:
+                if game_state.can_spawn(PING, pings_position, game_state.number_affordable(PING)):
+                    game_state.attempt_spawn(PING, pings_position, game_state.number_affordable(PING))
+
+            if game_state.can_spawn(EMP, EMP_position, game_state.number_affordable(EMP)):
+                game_state.attempt_spawn(EMP, EMP_position, game_state.number_affordable(EMP))        
+
+    def starter-algo_initialSetup(self, game_state):
+
+        destructors_positions_l0 = [[ 7, 10], [ 21, 10], [14, 10], [0, 13], [27, 13]]
+
+        filters_positions_l0 = []
+
+        
+
+    # Detect opponent's removal behavior
+    # If the removed unit has high stability, 
+    # this usually means they are preparing to attack from that opening.
+
+    # p1Units: [filters, encryptors, Destructors, ping?, EMP?, Scrambler? Remove?]
+    # sublists of p1Units: [x, y, stability, id]
+    
 
 if __name__ == "__main__":
     algo = AlgoStrategy()
