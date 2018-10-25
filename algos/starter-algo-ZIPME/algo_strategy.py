@@ -38,6 +38,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.info_from_p2 = {}
         self.enemy_removed_units = []
         self.enemy_removed_units_dict = {}
+        self.enemy_filters = []
+        self.enemy_filters_units = []
+        self.enemy_destructors = []
+        self.enemy_destructors_units = []
 
     def on_game_start(self, config):
         """ 
@@ -78,7 +82,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         This function is called every turn in game state wrapper as an argument.
         It records game_state from previous rounds. The first part records 
         breach_info, i.e., location damaged by enemy's information unit.
-        The second part records firewalls removed by enemy.
+        The second part records firewalls removed by enemy. Third part
+        records FILTERS built by enemy. Fourth part records DESTRUCTORS
+        built by enemy.
         """
         game_state = gamelib.GameState(self.config, turn_state)
 
@@ -92,13 +98,41 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.breach_x = -1
             self.breach_y = -1
 
-        # Second part
+        # Second part records firewall removed by enemy
         if len(game_state.p2_info[6]) > 0:
             if self.enemy_removed_units != game_state.p2_info[6]:
                 self.enemy_removed_units = game_state.p2_info[6]
                 gamelib.debug_write('Firewalls removed are: {}'.format(self.enemy_removed_units))
+
+        # Third part records FILTERS built by enemy 
+        if len(game_state.p2_info[0]) > 0:
+                self.enemy_filters_units = game_state.p2_info[0]                
+        
+        # Fourth part records DESTRUCTORS built by enemy
+        if len(game_state.p2_info[2]) > 0:
+                self.enemy_destructors_units = game_state.p2_info[2]                
+
+    def get_unit_type(self, unit_type):
+        if unit_type == 3:
+            return "PING"
+        elif unit_type == 4:
+            return "EMP"
+        elif unit_type == 5:
+            return "SCRAMBLER"
         else:
-            self.info_from_p2 = []
+            return "ERROR"
+
+    def get_location(self, p2_info_units_info):
+        """
+        Returns locations after parsing p2_info
+        [[19, 16, 60.0, '18'], [18, 16, 60.0, '20']
+
+        """
+        actual_locations = []
+        for each_info_unit in p2_info_units_info:
+            actual_locations.append([each_info_unit[0], each_info_unit[1]])
+
+        return actual_locations
 
     def check_firewall_pattern(self, game_state):
         """
@@ -118,12 +152,87 @@ class AlgoStrategy(gamelib.AlgoCore):
         else:
             self.enemy_removed_units_dict[temp] = 1
 
-        # if self.enemy_removed_units_dict[temp] >= 3:
-            # gamelib.debug_write('Enemy has removed {0} for {1} times'.format(self.enemy_removed_units_dict[temp], self.enemy_removed_units_dict[temp]))
-
         for key, value in self.enemy_removed_units_dict.items():
             if value >= 3:
+                # TO DO
                 gamelib.debug_write('Enemy has removed {0} for {1} times'.format(key, value))
+
+    def is_firewall_horizontal(self, game_state):
+        """
+        Check if the possible positions for destructors and filters are as follows.
+        If more than 20% of the expected position for filters and destructors are 
+        in the actual positions, enemy is suspected to be building a horizontal firewall.
+        """
+        enemy_possible_destructors_pos = [[0, 14], [27, 14], [6, 16], [7, 16], [11, 16], [12, 16], [15, 16], [16, 16], [19, 16], [20, 16]]
+
+        enemy_possible_filters_pos = [[1, 14], [2, 14], [25, 14], [26, 14], [3, 15], [24, 15], [4, 16], [5, 16], [6, 16], [7, 16], [8, 16], 
+                                      [9, 16], [10, 16], [11, 16], [12,16], [13, 16], [14, 16], [15, 16], [16, 16], [17, 16], [18, 16], [19, 16], 
+                                      [20, 16], [21, 16], [22, 16], [23, 16]]                     
+         
+        enemy_actual_filters_pos = self.get_location(self.enemy_filters_units)        
+        # gamelib.debug_write('enemy FILTERS actual locations: {}'.format(enemy_actual_filters_pos))
+
+        enemy_actual_destructors_pos = self.get_location(self.enemy_destructors_units)
+        # gamelib.debug_write('enemy DESTRUCTOR actual locations: {}'.format(enemy_actual_destructors_pos))
+
+        destructor_count = 0
+        filter_count = 0
+        
+        for each_possible_d_pos in enemy_possible_destructors_pos:
+            for each_actual_d_pos in enemy_actual_destructors_pos:                
+                if self.actual_expected_same_location(each_possible_d_pos[0], each_possible_d_pos[1], each_actual_d_pos[0], each_actual_d_pos[1]):
+                    destructor_count += 1
+
+        for each_possible_f_pos in enemy_possible_filters_pos:
+            for each_actual_f_pos in enemy_actual_filters_pos:
+                if self.actual_expected_same_location(each_possible_f_pos[0], each_possible_f_pos[1], each_actual_f_pos[0], each_actual_f_pos[1]):
+                    filter_count += 1
+        
+        d_prediction_accuracy = destructor_count / len(enemy_possible_destructors_pos)
+        f_prediction_accuracy = filter_count / len(enemy_possible_filters_pos)
+        
+        return d_prediction_accuracy > 0.2 and f_prediction_accuracy > 0.2
+                
+    def double_check_horizontal_firewall(self, game_state):
+        """
+        Check if any row from 14 to 18 on the enemy's side 
+        contains more than 8 firewalls. 
+        """
+        enemy_actual_filters_pos = self.get_location(self.enemy_filters_units)        
+        # gamelib.debug_write('enemy FILTERS actual locations: {}'.format(enemy_actual_filters_pos))
+
+        enemy_actual_destructors_pos = self.get_location(self.enemy_destructors_units)
+        # gamelib.debug_write('enemy DESTRUCTOR actual locations: {}'.format(enemy_actual_destructors_pos))
+
+        row_dict = {}
+
+        for each_actual_f_pos in enemy_actual_filters_pos:
+            if each_actual_f_pos[1] in row_dict:
+                row_dict[each_actual_f_pos[1]] += 1
+            else:
+                row_dict[each_actual_f_pos[1]] = 1
+
+        for each_actual_d_pos in enemy_actual_destructors_pos:
+            if each_actual_d_pos[1] in row_dict:
+                row_dict[each_actual_d_pos[1]] += 1
+            else:
+                row_dict[each_actual_d_pos[1]] = 1
+
+        gamelib.debug_write('row_dict: {}'.format(row_dict))
+
+        for key, value in row_dict.items():
+            if value >= 8 and key <= 18 and key >= 14:                
+                gamelib.debug_write('More than 8 locations in ROW {} are filled!'.format(key))
+                return True
+
+    def actual_expected_same_location(self, actual_row, actual_col, expected_row, expected_col):
+        """
+        Check if actual location is same as expected location.
+        """
+        if actual_row == expected_row and actual_col == expected_col:
+            return True
+        else:
+            return False
 
     def record_damage(self, game_state, row, col):
         if row == -1 or col == -1:
@@ -148,6 +257,9 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.restoreFirewall(game_state, DESTRUCTOR, pos)
 
     def damaged_neighbors(self, game_state, row, col):
+        """
+        Return positions around the location that is damaged by enemy.
+        """
         o_clock_9 = []        
         o_clock_9.append(col + 1)
         o_clock_9.append(row - 1)
@@ -166,10 +278,36 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         return o_clock_9, o_clock_3, o_clock_1, o_clock_10
 
+    def record_damage(self, game_state, row, col):
+        """
+        Record the location damaged by enemy. If a location
+        is attacked by more than 3 times, we spawn firewalls
+        around its neighbors.
+        """
+        if row == -1 or col == -1:
+            return
+            
+        temp = ()
+        temp = temp + (col,)
+        temp = temp + (row,)
+        
+        if temp in self.dic.keys():
+            self.dic[temp] += 1
+        else:
+            self.dic[temp] = 1
+
+        if self.dic[temp] >= 3:
+            gamelib.debug_write('Printing dic...\n {}'.format(self.dic))
+            self.time_for_action(game_state, row, col)
+
+    def time_for_action(self, game_state, row, col):
+        for pos in self.damaged_neighbors(game_state, row, col): 
+            gamelib.debug_write('neighbor is: [{0}, {1}]'.format(pos[0], pos[1]))   
+            self.restoreFirewall(game_state, DESTRUCTOR, pos)
+
     def restoreFirewall(self, game_state, firewall, position):
         if game_state.can_spawn(firewall, position):
             game_state.attempt_spawn(firewall, position)
-
 
     def remove_unattacked_firewall(self, game_state, N_terms, locations):
         for location in locations:
@@ -188,7 +326,6 @@ class AlgoStrategy(gamelib.AlgoCore):
             if unit.last_attack_round == N_terms:
                 game_state.attempt_remove(location)
 
-
     def starter_algo(self, game_state):
 
         destructors_positions_l1 = [[ 0, 13],[ 1, 12],[ 2, 11],[ 3, 10]]
@@ -206,6 +343,12 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.restoreFirewall(game_state, DESTRUCTOR, position)
 
         self.check_firewall_pattern(game_state)
+
+        if game_state.turn_number == 1 and self.is_firewall_horizontal(game_state):
+            gamelib.debug_write('\t* * * ALERT * * * \nEnemy\'s firewall is horizontal!')
+
+        if game_state.turn_number > 1 and self.double_check_horizontal_firewall(game_state):
+            gamelib.debug_write('\t* * * ALERT * * * \nEnemy\'s firewall is horizontal!')            
 
         # get EMP's position
         EMP_position = [ 14, 0]
