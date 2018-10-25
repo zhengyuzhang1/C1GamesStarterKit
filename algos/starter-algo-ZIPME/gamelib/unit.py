@@ -25,6 +25,7 @@ class GameUnit:
         """ Initialize unit variables using args passed
 
         """
+        from .game_state import FIREWALL_TYPES
         self.unit_type = unit_type
         self.config = config
         self.player_index = player_index
@@ -33,6 +34,10 @@ class GameUnit:
         self.y = y
         self.__serialize_type()
         self.stability = self.max_stability if not stability else stability
+        if unit_type in FIREWALL_TYPES:
+            self.last_attack_round = 0
+
+
 
     def __serialize_type(self):
         from .game_state import FIREWALL_TYPES, UNIT_TYPE_TO_INDEX, ENCRYPTOR, REMOVE
