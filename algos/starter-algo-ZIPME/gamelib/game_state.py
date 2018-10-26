@@ -2,7 +2,6 @@ import math
 import json
 import warnings
 import queue
-import gamelib
 
 from .navigation import ShortestPathFinder
 from .util import send_command, debug_write
@@ -37,7 +36,6 @@ class GameState:
         * my_time (int): The time you took to submit your previous turn
         * enemy_health (int): Your opponents current remaining health
         * enemy_time (int): Your opponents current remaining time
-
     """
 
     def __init__(self, config, serialized_string):
@@ -50,26 +48,6 @@ class GameState:
         """
         self.serialized_string = serialized_string
         self.config = config
-
-        global FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE, FIREWALL_TYPES, ALL_UNITS, UNIT_TYPE_TO_INDEX
-        UNIT_TYPE_TO_INDEX = {}
-        FILTER = config["unitInformation"][0]["shorthand"]
-        UNIT_TYPE_TO_INDEX[FILTER] = 0
-        ENCRYPTOR = config["unitInformation"][1]["shorthand"]
-        UNIT_TYPE_TO_INDEX[ENCRYPTOR] = 1
-        DESTRUCTOR = config["unitInformation"][2]["shorthand"]
-        UNIT_TYPE_TO_INDEX[DESTRUCTOR] = 2
-        PING = config["unitInformation"][3]["shorthand"]
-        UNIT_TYPE_TO_INDEX[PING] = 3
-        EMP = config["unitInformation"][4]["shorthand"]
-        UNIT_TYPE_TO_INDEX[EMP] = 4
-        SCRAMBLER = config["unitInformation"][5]["shorthand"]
-        UNIT_TYPE_TO_INDEX[SCRAMBLER] = 5
-        REMOVE = config["unitInformation"][6]["shorthand"]
-        UNIT_TYPE_TO_INDEX[REMOVE] = 6
-
-        ALL_UNITS = [PING, EMP, SCRAMBLER, FILTER, ENCRYPTOR, DESTRUCTOR]
-        FIREWALL_TYPES = [FILTER, ENCRYPTOR, DESTRUCTOR]
 
         self.ARENA_SIZE = 28
         self.HALF_ARENA = int(self.ARENA_SIZE / 2)
@@ -84,7 +62,27 @@ class GameState:
                 {'cores': 0, 'bits': 0},  # player 0, which is you
                 {'cores': 0, 'bits': 0}]  # player 1, which is the opponent
         self.__parse_state(serialized_string)
-
+        
+        global FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE, FIREWALL_TYPES, INFORMATION_TYPES, ALL_UNITS, UNIT_TYPE_TO_INDEX
+        UNIT_TYPE_TO_INDEX = {}
+        FILTER = config["unitInformation"][0]["shorthand"]
+        ENCRYPTOR = config["unitInformation"][1]["shorthand"]
+        DESTRUCTOR = config["unitInformation"][2]["shorthand"]
+        PING = config["unitInformation"][3]["shorthand"]
+        EMP = config["unitInformation"][4]["shorthand"]
+        SCRAMBLER = config["unitInformation"][5]["shorthand"]
+        REMOVE = config["unitInformation"][6]["shorthand"]
+        UNIT_TYPE_TO_INDEX[FILTER] = 0
+        UNIT_TYPE_TO_INDEX[ENCRYPTOR] = 1
+        UNIT_TYPE_TO_INDEX[DESTRUCTOR] = 2
+        UNIT_TYPE_TO_INDEX[PING] = 3
+        UNIT_TYPE_TO_INDEX[EMP] = 4
+        UNIT_TYPE_TO_INDEX[SCRAMBLER] = 5
+        UNIT_TYPE_TO_INDEX[REMOVE] = 6
+        ALL_UNITS = [FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE]
+        FIREWALL_TYPES = [FILTER, ENCRYPTOR, DESTRUCTOR]
+        INFORMATION_TYPES = [PING, EMP, SCRAMBLER]
+        
     def __parse_state(self, state_line):
         """
         Fills in map based on the serialized game state so that self.game_map[x,y] is a list of GameUnits at that location.
@@ -211,6 +209,9 @@ class GameState:
         defense_line = self.get_front_defense_line(player_index)
         return list(filter(lambda x: not self.contains_stationary_unit(x), defense_line))
     
+    def opening_to_start(self, opening, target_edge):
+        
+        
     def submit_turn(self):
         """Submit and end your turn.
         Must be called at the end of your turn or the algo will hang.
@@ -402,7 +403,7 @@ class GameState:
             else:
                 warnings.warn("Could not remove a unit from {}. Location has no firewall or is enemy territory.".format(location))
         return removed_units
-
+        
     def find_path_to_edge(self, start_location, target_edge):
         """Gets the path a unit at a given location would take
 

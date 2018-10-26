@@ -44,7 +44,7 @@ class AlgoCore(object):
         debug_write(BANNER_TEXT)
 
         print_string_flag = True
-        print_nums = 5
+        print_nums = 25
         
         while True:
             # Note: Python blocks and hangs on stdin. Can cause issues if connections aren't setup properly and may need to

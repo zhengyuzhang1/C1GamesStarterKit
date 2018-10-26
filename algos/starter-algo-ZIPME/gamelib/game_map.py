@@ -45,7 +45,6 @@ class GameMap:
     def __setitem__(self, location, val):
         if type(location) == tuple and len(location) == 2 and self.in_arena_bounds(location):
             self.__map[location[0]][location[1]] = val
-            return
         self._invalid_coordinates(location)
 
     def __iter__(self):
@@ -100,7 +99,10 @@ class GameMap:
         bottom_half_check = (y >= self.HALF_ARENA and x >= startx and x <= endx)
 
         return bottom_half_check or top_half_check
-
+    
+    def get_row(self, row):
+        return filter(self.in_arena_bounds, map(lambda x: (x,row), range(self.ARENA_SIZE)))
+        
     def get_edge_locations(self, quadrant_description):
         """Takes in an edge description and returns a list of locations.
         
