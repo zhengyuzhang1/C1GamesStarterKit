@@ -28,7 +28,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         random.seed()
 
         self.EMP_COUNT = 2
-        self.HALF_MAP = 14
+        self.ARENA_SIZE = 28
+        self.HALF_ARENA = int(self.ARENA_SIZE / 2)
         self.breach_x = -1
         self.breach_y = -1
         self.UNIT_TYPE = -1
@@ -38,13 +39,16 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.info_from_p2 = {}
         self.enemy_removed_units = []
         self.enemy_removed_units_dict = {}
-
+        self.pre_game_state = None
+        self.actions = [[],[]]
+        
     def on_game_start(self, config):
         """ 
         Read in config and perform any initial setup here 
         """
         gamelib.debug_write('Configuring your custom algo strategy...')
         self.config = config
+        self.set_helper_map(config)
         global FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER
         FILTER = config["unitInformation"][0]["shorthand"]
         ENCRYPTOR = config["unitInformation"][1]["shorthand"]
@@ -53,6 +57,13 @@ class AlgoStrategy(gamelib.AlgoCore):
         EMP = config["unitInformation"][4]["shorthand"]
         SCRAMBLER = config["unitInformation"][5]["shorthand"]
 
+    def set_helper_map(self, config):
+        self.helper_map = gamelib.GameMap(config)
+        #if firewall is required for block, and so should not be removed in any case
+        self.helper_map.necessity = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        self.helper_map.turn_last_attack = [[-1] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        self.helper_map.turn_last_damage = [[-1] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        
     def on_turn(self, turn_state):
         """
         This function is called every turn with the game state wrapper as
@@ -61,44 +72,42 @@ class AlgoStrategy(gamelib.AlgoCore):
         unit deployments, and transmitting your intended deployments to the
         game engine.
         """
-        game_state = gamelib.GameState(self.config, turn_state)
-        gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
+                
+        self.game_state = gamelib.GameState(self.config, turn_state)
+        #if not first turn, parse last turn's action phase strings and update states difference
+        if self.pre_game_state is not None:
+            self.parse_action_phase()
+            self.set_turn_change()
+            
+        self.pre_game_state = self.game_state
+        self.__action_strings = []
+        
+        gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(self.game_state.turn_number))
         # game_state.suppress_warnings(True)  # Uncomment this line to suppress warnings.        
 
-        self.enemyPrevHealth = game_state.enemy_health
-
-        self.starter_algo(game_state)        
-
-        self.enemyCurrHealth = game_state.enemy_health
+        self.starter_algo(self.game_state)        
         
-        game_state.submit_turn()
+        self.game_state.submit_turn()
 
-    def parse_action_phase(self, turn_state):
+    def set_turn_change(self):
+        self.enemyPrevHealth = self.game_state.enemy_health
+        self.enemyCurrHealth = self.game_state.enemy_health
+        
+    def on_action_frame(self, action_string):
+        self.__action_strings.append(action_string)
+        
+    def parse_action_phase(self):
         """
         This function is called every turn in game state wrapper as an argument.
         It records game_state from previous rounds. The first part records 
         breach_info, i.e., location damaged by enemy's information unit.
         The second part records firewalls removed by enemy.
         """
-        game_state = gamelib.GameState(self.config, turn_state)
-
-        # First part
-        if len(game_state.breach_info) > 0 and game_state.breach_info[0][0][1] < self.HALF_MAP:
-            self.breach_x = game_state.breach_info[0][0][0]
-            self.breach_y = game_state.breach_info[0][0][1]            
-            self.UNIT_TYPE = game_state.breach_info[0][2]
-            gamelib.debug_write('Location [{0}, {1}] is under attack!'.format(self.breach_x, self.breach_y))    
-        else:
-            self.breach_x = -1
-            self.breach_y = -1
-
-        # Second part
-        if len(game_state.p2_info[6]) > 0:
-            if self.enemy_removed_units != game_state.p2_info[6]:
-                self.enemy_removed_units = game_state.p2_info[6]
-                gamelib.debug_write('Firewalls removed are: {}'.format(self.enemy_removed_units))
-        else:
-            self.info_from_p2 = []
+        
+        #add actions of opponent
+        self.actions[1].append(gamelib.Action(self.config, self.pre_game_state, self.helper_map, self.__action_strings, 1))
+        #add actions of self
+        #self.actions[0].append(gamelib.Action(self.pre_game_state, self.__action_strings, 0))
 
     def check_firewall_pattern(self, game_state):
         """
@@ -180,10 +189,10 @@ class AlgoStrategy(gamelib.AlgoCore):
                 warnings.warn("Could not remove a unit from {}. Location has no firewall.".format(location))
                 continue
                 #current life of firewall on location:
-            unit = game_state.game_map[location[0], location[1]][0]:
+            unit = game_state.game_map[location[0], location[1]][0]
             if unit.stability == unit.max_stability:
                 unit.last_attack_round += 1
-            else
+            else:
                 unit.last_attack_round = 0
             if unit.last_attack_round == N_terms:
                 game_state.attempt_remove(location)
@@ -191,14 +200,14 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     def starter_algo(self, game_state):
 
-        destructors_positions_l1 = [[ 0, 13],[ 1, 12],[ 2, 11],[ 3, 10]]
+        destructors_positions_l1 = [[ 0, 13]]
 
-        destructors_positions_l2 = [[ 1, 13],[ 2, 12],[ 3, 11],[ 4, 10]]
-
+        destructors_positions_l2 = []
+        """
         for player in [0,1]:
             gamelib.debug_write('Defense line for player {} is:\n'.format(player), game_state.get_front_defense_line(0))
             gamelib.debug_write('Opening for player {} is:\n'.format(player), game_state.get_openings(0))
-        
+        """
         for position in destructors_positions_l1:
             self.restoreFirewall(game_state, DESTRUCTOR, position)
 
@@ -206,22 +215,25 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.restoreFirewall(game_state, DESTRUCTOR, position)
 
         self.check_firewall_pattern(game_state)
-
+                   
         # get EMP's position
-        EMP_position = [ 14, 0]
+        EMP_position = [ 13, 0]
 
         # get ping's position
-        pings_position = [ 14, 0]
+        pings_position = [ 27, 13]
 
         while (game_state.number_affordable(EMP) > 0):
             # if EMP damanges opponent, summon ping
-            if game_state.turn_number and self.enemyCurrHealth != self.enemyPrevHealth:
+            if game_state.turn_number == 0:# and self.enemyCurrHealth != self.enemyPrevHealth:
                 if game_state.can_spawn(PING, pings_position, game_state.number_affordable(PING)):
                     game_state.attempt_spawn(PING, pings_position, game_state.number_affordable(PING))
 
             if game_state.can_spawn(EMP, EMP_position, game_state.number_affordable(EMP)):
                 game_state.attempt_spawn(EMP, EMP_position, game_state.number_affordable(EMP))        
 
+        if game_state.contains_stationary_unit((0,13)):
+            game_state.attempt_remove((0,13))
+    
     def starter_algo_initialSetup(self, game_state):
 
         destructors_positions_l0 = [[ 7, 10], [ 21, 10], [14, 10], [0, 13], [27, 13]]

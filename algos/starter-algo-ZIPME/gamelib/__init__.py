@@ -8,6 +8,7 @@ from .game_state import GameState
 from .unit import GameUnit
 from .game_map import GameMap
 from .advanced_game_state import AdvancedGameState
-
-__all__ = ["advanced_game_state", "algocore", "game_state", "game_map", "navigation", "unit", "util"]
+from .action import Action
+from .unit_group import UnitGroup
+__all__ = ["advanced_game_state", "algocore", "game_state", "game_map", "navigation", "unit", "util", "action", "unit_group"]
  
