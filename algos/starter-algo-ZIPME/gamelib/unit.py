@@ -34,8 +34,9 @@ class GameUnit:
         self.y = y
         self.__serialize_type()
         self.stability = self.max_stability if not stability else stability
+        self.last_damage_turn = 0
         if unit_type in FIREWALL_TYPES:
-            self.last_attack_round = 0
+            self.last_attack_turn = 0
 
 
 

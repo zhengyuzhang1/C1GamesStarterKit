@@ -32,8 +32,7 @@ class AlgoCore(object):
         send_command("")
 
     def parse_action_phase(self, game_state):
-
-        self.game_state = game_state
+        pass        
 
     # only override this function if you have a 
     def start(self):
@@ -44,6 +43,9 @@ class AlgoCore(object):
         """
         debug_write(BANNER_TEXT)
 
+        print_string_flag = True
+        print_nums = 5
+        
         while True:
             # Note: Python blocks and hangs on stdin. Can cause issues if connections aren't setup properly and may need to
             # manually kill this Python program.
@@ -67,7 +69,11 @@ class AlgoCore(object):
                     """
                     If stateType == 1, this game_state_string string represents the results of an action phase
                     """
-                    self.parse_action_phase(game_state_string)
+                    if print_string_flag and print_nums > 0:
+                        debug_write(game_state_string)
+                        print_nums -= 1
+                    
+                    self.on_action_frame(game_state_string)
                 elif stateType == 2:
                     """
                     This is the end game message. This means the game is over so break and finish the program.
