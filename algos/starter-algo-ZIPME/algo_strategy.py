@@ -318,10 +318,10 @@ class AlgoStrategy(gamelib.AlgoCore):
                 warnings.warn("Could not remove a unit from {}. Location has no firewall.".format(location))
                 continue
                 #current life of firewall on location:
-            unit = game_state.game_map[location[0], location[1]][0]:
+            unit = game_state.game_map[location[0], location[1]][0]
             if unit.stability == unit.max_stability:
                 unit.last_attack_round += 1
-            else
+            else:
                 unit.last_attack_round = 0
             if unit.last_attack_round == N_terms:
                 game_state.attempt_remove(location)
