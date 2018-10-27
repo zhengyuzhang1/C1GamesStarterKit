@@ -156,7 +156,7 @@ class GameState:
         warnings.warn("Invalid unit {}".format(unit))
 
     #added by zzy
-    def get_front_defense_line(self, player_index = 1):
+    def get_defense_line(self, player_index = 1):
         dist = [[float('inf')] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
         from_which = [[None] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
         visited = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
@@ -205,12 +205,18 @@ class GameState:
         return line
             
     #added by zzy
-    def get_openings(self, player_index = 1):
-        defense_line = self.get_front_defense_line(player_index)
+    def get_openings(self, defense_line):
         return list(filter(lambda x: not self.contains_stationary_unit(x), defense_line))
     
-    def opening_to_start(self, opening, target_edge):
+    def can_block_enemy_openings(self, openings):
+        return all(map(lambda loc: loc in self.game_map.get_row(self.HALF_ARENA), openings))
         
+    def locs_block_enemy_openings(self):
+        openings = list(filter(lambda x: not self.contains_stationary_unit(x), self.game_map.get_row(14)))
+        return list(map(lambda x: (x[0], x[1]-1), openings))
+    
+    def opening_to_start(self, opening, target_edge):
+        pass
         
     def submit_turn(self):
         """Submit and end your turn.
