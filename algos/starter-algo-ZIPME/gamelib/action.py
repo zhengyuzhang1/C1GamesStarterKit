@@ -148,12 +148,14 @@ class Action:
                     helper_map.attack_turn[x][y][game_state.turn_number] = damage
                 else:
                     helper_map.attack_turn[x][y][game_state.turn_number] += damage
+
                 self.update_helper_map_priority_from_attack_damage(helper_map, (x, y), damage, weight= 0.3)
 
                 if self.turn_number not in helper_map.damage_turn[x][y]:
                     helper_map.damage_turn[x2][y2][game_state.turn_number] = damage
                 else:
                     helper_map.damage_turn[x2][y2][game_state.turn_number] += damage
+
                 self.update_helper_map_priority_from_attack_damage(helper_map, (x2, y2), damage, weight= 0.4)
 
                 if attacker_type_id in ["3", "4", "5"]:
@@ -173,7 +175,8 @@ class Action:
                 unit_group.add_breach(1)
                 x, y = map(int, loc)
                 helper_map.breach_turn[x][y].append(self.turn_number)
-                self.update_helper_map_priority_from_enemy_path(helper_map, unit_group, weight= 0.5)
+
+                self.update_helper_map_priority_from_enemy_path(helper_map, unit_group, weight= 0.2)
 
             for loc, receivers, damage, unit_type_id, unit_id, player_index in self.single_player_event(frame[EVENT][SELFDESTRUCT], PLAYER_ID):
                 unit_group = self.unit_id_to_unit_group[unit_id]
@@ -186,7 +189,9 @@ class Action:
             helper_map.priority[location[0]][location[1]] += weight
   
     def update_helper_map_priority_from_attach_damage(self, helper_map, location, damage, weight= 0.2):
+
         helper_map.priority[location[0]][location[1]] += damage * weight
+
 
 
 

@@ -143,7 +143,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         enemy_possible_filters_pos = [[1, 14], [2, 14], [25, 14], [26, 14], [3, 15], [24, 15], [4, 16], [5, 16], [6, 16], [7, 16], [8, 16], 
                                       [9, 16], [10, 16], [11, 16], [12,16], [13, 16], [14, 16], [15, 16], [16, 16], [17, 16], [18, 16], [19, 16], 
                                       [20, 16], [21, 16], [22, 16], [23, 16]]                     
-         
+        
+
         # gamelib.debug_write('enemy FILTERS actual locations: {}'.format(enemy_actual_filters_pos))
 
         # gamelib.debug_write('enemy DESTRUCTOR actual locations: {}'.format(enemy_actual_destructors_pos))
@@ -249,8 +250,8 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.block_and_final_attack(self.locs_block_and_final_attack, 3, 33)
             return      
         
-        self.initial_firewall_setup(game_state)
-
+        #self.initial_firewall_setup(game_state)
+        '''
         l0_l1_filters_positions = [[27, 13], [26, 12]]
 
         l3_filters_postions = [[ 6, 11],[ 7, 11],[ 9, 11],[ 10, 11],[ 11, 11],[ 13, 11],[ 14, 11],[15, 11],[ 16, 11],[ 17, 11],[ 18, 11],[19, 11],[ 20, 11],[ 21, 11],[ 22, 11],[23,11],[ 24, 11],[ 25, 11]]
@@ -277,7 +278,47 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         for position in l1_filters_positions:
             self.restore_firewall(game_state, FILTER, position)
+        '''
+        destructor_list_0 = [ [0, 13], [26, 13], [3, 11], [7, 11], [11, 11], [16, 11], [20, 11], [23, 11]]
+        filter_list_0 = [[27, 13]]
 
+        destructor_list_1 = [[13, 11], [2, 12], [25, 13]]
+        filter_list_1 = [[1, 13], [3, 12], [2, 11], [5,11], [6, 11], [8, 11], [9, 11], [10,11], [12,11], [14,11], [15,11], [17,11], [18,11], [19,11], [21,11], [22,11], [24,11], [25,11], [26, 12]]
+
+        filter_list_2 = [ [2, 13], [3, 13], [4, 13], [5, 13], [6, 13], [7, 13], [8, 13], [9, 13], [10, 13], [11, 13], [12, 13], [13,13], [14,13], [15, 13], [16, 13], [17, 13], [18, 13], [19, 13], [20, 13], [21, 13], [22, 13], [23, 13] ]
+        destructor_list_2 = [ [1, 12], [2, 11] ]
+
+        filter_list_3 = [[3, 10], [4, 9], [5, 9], [6, 9], [7, 9], [8, 9], [9, 9]]
+
+
+        
+        for location in self.rank_locations_priority(destructor_list_0):
+            self.game_state.attempt_spawn(DESTRUCTOR, location, num=1)
+
+        for location in self.rank_locations_priority(filter_list_0):
+            self.game_state.attempt_spawn(FILTER, location, num=1)
+
+        for location in self.rank_locations_priority(destructor_list_1):
+            self.game_state.attempt_spawn(DESTRUCTOR, location, num=1)
+
+        for location in self.rank_locations_priority(filter_list_1):
+            self.game_state.attempt_spawn(FILTER, location, num=1)
+
+        for location in self.rank_locations_priority(destructor_list_2):
+            self.game_state.attempt_spawn(DESTRUCTOR, location, num=1)
+
+        for location in self.rank_locations_priority(filter_list_2):
+            self.game_state.attempt_spawn(FILTER, location, num=1)
+
+        for location in self.rank_locations_priority(filter_list_3):
+            self.game_state.attempt_spawn(FILTER, location, num=1)
+
+        for location in [[22, 9], [5, 8], [23, 9]]:
+            self.game_state.attempt_spawn(ENCRYPTOR, location, num=1)
+
+ 
+
+  
         self.deploy_attackers(game_state)
         
 
@@ -288,8 +329,18 @@ class AlgoStrategy(gamelib.AlgoCore):
     def deploy_attackers(self, game_state):
         EMP_position = [24, 10] # Try [5, 8]?
         
-        if game_state.can_spawn(EMP, EMP_position, 1) and game_state.turn_number % 3 == 0:
-            game_state.attempt_spawn(EMP, EMP_position, 1)
+        #if game_state.can_spawn(EMP, EMP_position, 1) and game_state.turn_number % 2 == 0:
+
+
+        if game_state.turn_number ==0:
+            while game_state.can_spawn(PING, [16, 2], 1):
+                game_state.attempt_spawn(PING, [16, 2], 1)
+        else:
+            while game_state.can_spawn(EMP, EMP_position, 1):
+                game_state.attempt_spawn(EMP, EMP_position, 1)
+
+
+
 
     def initial_firewall_setup(self, game_state):
         # round 0 DESTRUCTORs' positons
