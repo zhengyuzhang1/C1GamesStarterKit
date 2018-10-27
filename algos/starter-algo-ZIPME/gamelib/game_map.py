@@ -107,6 +107,9 @@ class GameMap:
             row1 = row
         return map(lambda y: (y, row), range(self.HALF_ARENA-row1-1, self.HALF_ARENA+row1+1))
         
+    def get_symmetry(self, locations):
+        return [[self.ARENA_SIZE - 1 - loc[0], loc[1]] for loc in locations]
+        
     def get_self_arena(self):
         locations = []
         for row in range(self.HALF_ARENA):

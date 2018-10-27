@@ -83,6 +83,23 @@ class GameState:
         FIREWALL_TYPES = [FILTER, ENCRYPTOR, DESTRUCTOR]
         INFORMATION_TYPES = [PING, EMP, SCRAMBLER]
         
+        self.should = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        self.shouldnot = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+    
+    def restore_should(self):
+        self.should = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        
+    def restore_shouldnot(self):
+        self.shouldnot = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+    
+    def set_should(self, locations = [], val):
+        for x, y in locations:
+            self.should[x][y] = val
+    
+    def set_shouldnot(self, locations = [], val):
+        for x, y in locations:
+            self.shouldnot[x][y] = val
+        
     def __parse_state(self, state_line):
         """
         Fills in map based on the serialized game state so that self.game_map[x,y] is a list of GameUnits at that location.
@@ -344,10 +361,11 @@ class GameState:
         blocked = self.contains_stationary_unit(location) or (stationary and len(self.game_map[location[0],location[1]]) > 0)
         correct_territory = location[1] < self.HALF_ARENA
         on_edge = location in (self.game_map.get_edge_locations(self.game_map.BOTTOM_LEFT) + self.game_map.get_edge_locations(self.game_map.BOTTOM_RIGHT))
-
+        should = not self.shouldnot[location[0]][location[1]]
+        
         return (affordable and correct_territory and not blocked and
                 (stationary or on_edge) and
-                (not stationary or num == 1))
+                (not stationary or num == 1) and should)
 
     def attempt_spawn(self, unit_type, locations, num=1):
         """Attempts to spawn new units with the type given in the given locations.
@@ -388,6 +406,28 @@ class GameState:
                     warnings.warn("Could not spawn {} number {} at location {}. Location is blocked, invalid, or you don't have enough resources.".format(unit_type, i, location))
         return spawned_units
 
+    def revoke_spawn(self, unit_type, locations, num=1):
+        if unit_type not in ALL_UNITS:
+            self._invalid_unit(unit_type)
+            return
+        if num < 1:
+            return
+      
+        if type(locations[0]) == int:
+            locations = [locations]
+        revoked_units = 0
+        for x, y in locations:
+            item = (unit_type, x, y)
+            for i in range(num):
+                if is_stationary(unit_type) and item in self._build_stack:
+                    self._build_stack.remove(item)
+                elif not is_stationary(unit_type) and item in self._deploy_stack:
+                    self._deploy_stack.remove(item)
+                    revoked_units += 1
+                else:
+                    warnings.warn("Could not revoke {} number {} at location {}.".format(unit_type, i, (x,y)))
+        return revoked_units
+        
     def attempt_remove(self, locations):
         """Attempts to remove existing friendly firewalls in the given locations.
 
@@ -404,6 +444,8 @@ class GameState:
         for location in locations:
             if location[1] < self.HALF_ARENA and self.contains_stationary_unit(location):
                 x, y = map(int, location)
+                if self.should[x][y]:
+                    return
                 self._build_stack.append((REMOVE, x, y))
                 removed_units += 1
             else:
