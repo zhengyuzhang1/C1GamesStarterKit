@@ -6,6 +6,7 @@ import json
 from sys import maxsize
 from gamelib.game_state import is_stationary
 
+
 """
 Most of the algo code you write will be in this file unless you create new
 modules yourself. Start by modifying the 'on_turn' function.
@@ -78,12 +79,20 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.helper_map = gamelib.GameMap(config)
         #if firewall is required for block, and so should not be removed in any case
         self.helper_map.necessity = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
-        self.helper_map.attack_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
-        self.helper_map.damage_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
+        self.helper_map.attack_turn = [[{} for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
+        self.helper_map.damage_turn = [[{} for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.remove_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.breach_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.n_units_ever_spawned = [[[0] * 7 for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
-        
+        self.helper_map.priority = [[[0]*100 for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
+         
+    def rank_locations_priority(self, location_list):
+        priority = []
+        for location in location_list:
+            priority.append(self.helper_map.priority[location[0]][location[1][self.game_state.turn_number]])
+        return = [location for _,location in sorted(zip(priority,location_list), reverse=True)]
+
+
     def on_turn(self, turn_state):
         """
         This function is called every turn with the game state wrapper as
@@ -191,6 +200,7 @@ class AlgoStrategy(gamelib.AlgoCore):
             if self.game_state.turn_number - self.helper_map.attack_turn[-1] > threshold_terms and self.game_state.turn_number - self.helper_map.damage_turn[-1] > threshold_terms:
                 self.game_state.attempt_remove(location)
 
+
     def starter_algo(self, game_state):
 
         filters_positions_l1 = list(map(lambda x: [x, 13], range(1, self.ARENA_SIZE)))
@@ -227,7 +237,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         if game_state.turn_number > 1:
             self.game_state.attempt_spawn(PING, pings_position, game_state.number_affordable(PING))
 
-    
+       
 
 
         

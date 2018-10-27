@@ -9,7 +9,7 @@ class UnitGroup:
         self.attack = attack
         self.breach = breach
         self.selfdestruct_damage = selfdestruct_damage
-        
+         
     def add_breach(self, n_breach = 1):
         self.breach += n_breach
     
