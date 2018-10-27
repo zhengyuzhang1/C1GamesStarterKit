@@ -2,8 +2,7 @@ from .util import debug_write
 from .unit_group import UnitGroup
 import json
 
-def is_stationary(unit_type):
-    return unit_type in FIREWALL_TYPES
+from .game_state import is_stationary
 
 class Action:
     """Represents actions of a players in a turn
@@ -43,7 +42,6 @@ class Action:
         """
     
         self.player_index = player_index
-        
         global FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE, FIREWALL_TYPES, INFORMATION_TYPES, ALL_UNITS, UNIT_TYPE_TO_INDEX
         UNIT_TYPE_TO_INDEX = {}
         FILTER = config["unitInformation"][0]["shorthand"]
@@ -60,8 +58,7 @@ class Action:
         UNIT_TYPE_TO_INDEX[EMP] = 4
         UNIT_TYPE_TO_INDEX[SCRAMBLER] = 5
         UNIT_TYPE_TO_INDEX[REMOVE] = 6
-
-        ALL_UNITS = [PING, EMP, SCRAMBLER, FILTER, ENCRYPTOR, DESTRUCTOR]
+        ALL_UNITS = [FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE]
         FIREWALL_TYPES = [FILTER, ENCRYPTOR, DESTRUCTOR]
         INFORMATION_TYPES = [PING, EMP, SCRAMBLER]
         
@@ -86,7 +83,9 @@ class Action:
 
     def single_player_event(self, event, player_id):
         return filter(lambda x: x[-1] == player_id, event)
-    
+   
+
+ 
     def __parse_frames(self, game_state, helper_map, serialized_strings, player_index):
         """
         Fills in map based on the serialized game state so that self.game_map[x,y] is a list of GameUnits at that location.
@@ -110,7 +109,7 @@ class Action:
         self.bits_used = bits - game_state._player_resources[player_index]["bits"]
         
         #parse spawned units
-        self.firewalls_spawned = [[], [], []]
+        self.firewall_spawned = [[], [], []]
         self.removed = [[], [], []]
         self.attacker_group_spawned = [[], [], []]
         information_units_spawned = [{}, {}, {}]
@@ -119,9 +118,11 @@ class Action:
             loc, unit_type_id, unit_id, play_id = unit
             x, y = map(int, loc)
             unit_type = ALL_UNITS[int(unit_type_id)]
+            helper_map.n_units_ever_spawned[x][y][int(unit_type_id)] += 1
             if is_stationary(unit_type):
-                self.firewalls_spawned[unit_type_id].append((x,y))
+                self.firewall_spawned[unit_type_id].append((x,y))
             elif unit_type == REMOVE:
+                helper_map.remove_turns[x][y].append(self.turn_number)
                 for i in range(3):
                     for u2 in units[i]:
                         if [u2[0], u2[1]] == loc:
@@ -142,28 +143,55 @@ class Action:
             for attacker, receiver, damage, attacker_type_id, attacker_id, receiver_id, player_id in self.single_player_event(frame[EVENT][ATTACK], PLAYER_ID):
                 x, y = map(int, attacker)
                 x2, y2 = map(int, receiver)
-                helper_map.turn_last_attack[x][y] = self.turn_number
-                helper_map.turn_last_damage[x2][y2] = self.turn_number
+
+                if self.turn_number not in helper_map.attack_turn[x][y]:
+                    helper_map.attack_turn[x][y][game_state.turn_number] = damage
+                else:
+                    helper_map.attack_turn[x][y][game_state.turn_number] += damage
+
+                self.update_helper_map_priority_from_attack_damage(helper_map, (x, y), damage, weight= 0.3)
+
+                if self.turn_number not in helper_map.damage_turn[x][y]:
+                    helper_map.damage_turn[x2][y2][game_state.turn_number] = damage
+                else:
+                    helper_map.damage_turn[x2][y2][game_state.turn_number] += damage
+
+                self.update_helper_map_priority_from_attack_damage(helper_map, (x2, y2), damage, weight= 0.4)
+
                 if attacker_type_id in ["3", "4", "5"]:
                     unit_group = self.unit_id_to_unit_group[attacker_id]
-                    unit_group.add_damage(float(damage))
+                    unit_group.add_attack(float(damage))
+
+            unique_update_group = set()
             for pre_loc, loc, not_used, unit_type_id, unit_id, player_index in self.single_player_event(frame[EVENT][MOVE], PLAYER_ID):
                 unit_group = self.unit_id_to_unit_group[unit_id]
                 x, y = map(int, loc)
-                unit_group.append_path((x,y))
+                if unit_group not in unique_update_group:
+                    unit_group.append_path((x,y))
+                    unique_update_group.add(unit_group)
+
             for loc, damage, unit_type_id, unit_id, player_index in self.single_player_event(frame[EVENT][BREACH], PLAYER_ID):
                 unit_group = self.unit_id_to_unit_group[unit_id]
                 unit_group.add_breach(1)
-                
-        
-                
-                        
-                
-                
-                
-  
+                x, y = map(int, loc)
+                helper_map.breach_turn[x][y].append(self.turn_number)
 
+                self.update_helper_map_priority_from_enemy_path(helper_map, unit_group, weight= 0.2)
 
-
- 
+            for loc, receivers, damage, unit_type_id, unit_id, player_index in self.single_player_event(frame[EVENT][SELFDESTRUCT], PLAYER_ID):
+                unit_group = self.unit_id_to_unit_group[unit_id]
+                unit_group.add_selfdestruct_damage(damage * len(receivers))
+                
     
+    def update_helper_map_priority_from_enemy_path(self, helper_map, unit_group, weight= 0.2):
+        enemy_path = unit_group.path
+        for location in enemy_path:
+            helper_map.priority[location[0]][location[1]] += weight
+  
+    def update_helper_map_priority_from_attach_damage(self, helper_map, location, damage, weight= 0.2):
+
+        helper_map.priority[location[0]][location[1]] += damage * weight
+
+
+
+

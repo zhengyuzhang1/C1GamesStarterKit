@@ -112,3 +112,20 @@ class AdvancedGameState(GameState):
                 if unit.unit_type == DESTRUCTOR and unit.player_index != player_index:
                     attackers.append(unit)
         return attackers
+    
+    def simulate_path(self, unit_group, player_index):
+        from .game_state import DESTRUCTOR, UNIT_TYPE_TO_INDEX
+        soldier_type_config = self.config["unitInformation"][UNIT_TYPE_TO_INDEX[unit_group.unit_type]]
+        damage = self.config["unitInformation"][UNIT_TYPE_TO_INDEX[DESTRUCTOR]]["damage"]
+        damage_taken = 0.
+        for loc in unit_group.path:
+            damage_taken += len(self.get_attackers(loc, player_index)) * damage / soldier_type_config["speed"]
+        remaining_soldiers = unit_group.number - damage_taken // soldier_type_config["stability"]
+        breach = 0.
+        selfdestruct_damage = 0.
+        if player_index == 0 and unit_group.path[-1] in self.helper_map.get_edge_locations(1) + self.helper_map.get_edge_locations(2) or player_index == 1 and unit_group.path[-1] in self.helper_map.get_edge_locations(3) + self.helper_map.get_edge_locations(4):
+            breach = remaining_soldiers * 1.0
+        else:
+            selfdestruct_damage = remaining_soldiers * soldier_type_config["stability"]            
+            
+        return breach, selfdestruct_damage

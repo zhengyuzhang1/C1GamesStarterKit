@@ -2,7 +2,6 @@ import math
 import json
 import warnings
 import queue
-import gamelib
 
 from .navigation import ShortestPathFinder
 from .util import send_command, debug_write
@@ -37,7 +36,6 @@ class GameState:
         * my_time (int): The time you took to submit your previous turn
         * enemy_health (int): Your opponents current remaining health
         * enemy_time (int): Your opponents current remaining time
-
     """
 
     def __init__(self, config, serialized_string):
@@ -50,26 +48,6 @@ class GameState:
         """
         self.serialized_string = serialized_string
         self.config = config
-
-        global FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE, FIREWALL_TYPES, ALL_UNITS, UNIT_TYPE_TO_INDEX
-        UNIT_TYPE_TO_INDEX = {}
-        FILTER = config["unitInformation"][0]["shorthand"]
-        UNIT_TYPE_TO_INDEX[FILTER] = 0
-        ENCRYPTOR = config["unitInformation"][1]["shorthand"]
-        UNIT_TYPE_TO_INDEX[ENCRYPTOR] = 1
-        DESTRUCTOR = config["unitInformation"][2]["shorthand"]
-        UNIT_TYPE_TO_INDEX[DESTRUCTOR] = 2
-        PING = config["unitInformation"][3]["shorthand"]
-        UNIT_TYPE_TO_INDEX[PING] = 3
-        EMP = config["unitInformation"][4]["shorthand"]
-        UNIT_TYPE_TO_INDEX[EMP] = 4
-        SCRAMBLER = config["unitInformation"][5]["shorthand"]
-        UNIT_TYPE_TO_INDEX[SCRAMBLER] = 5
-        REMOVE = config["unitInformation"][6]["shorthand"]
-        UNIT_TYPE_TO_INDEX[REMOVE] = 6
-
-        ALL_UNITS = [PING, EMP, SCRAMBLER, FILTER, ENCRYPTOR, DESTRUCTOR]
-        FIREWALL_TYPES = [FILTER, ENCRYPTOR, DESTRUCTOR]
 
         self.ARENA_SIZE = 28
         self.HALF_ARENA = int(self.ARENA_SIZE / 2)
@@ -84,7 +62,44 @@ class GameState:
                 {'cores': 0, 'bits': 0},  # player 0, which is you
                 {'cores': 0, 'bits': 0}]  # player 1, which is the opponent
         self.__parse_state(serialized_string)
-
+        
+        global FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE, FIREWALL_TYPES, INFORMATION_TYPES, ALL_UNITS, UNIT_TYPE_TO_INDEX
+        UNIT_TYPE_TO_INDEX = {}
+        FILTER = config["unitInformation"][0]["shorthand"]
+        ENCRYPTOR = config["unitInformation"][1]["shorthand"]
+        DESTRUCTOR = config["unitInformation"][2]["shorthand"]
+        PING = config["unitInformation"][3]["shorthand"]
+        EMP = config["unitInformation"][4]["shorthand"]
+        SCRAMBLER = config["unitInformation"][5]["shorthand"]
+        REMOVE = config["unitInformation"][6]["shorthand"]
+        UNIT_TYPE_TO_INDEX[FILTER] = 0
+        UNIT_TYPE_TO_INDEX[ENCRYPTOR] = 1
+        UNIT_TYPE_TO_INDEX[DESTRUCTOR] = 2
+        UNIT_TYPE_TO_INDEX[PING] = 3
+        UNIT_TYPE_TO_INDEX[EMP] = 4
+        UNIT_TYPE_TO_INDEX[SCRAMBLER] = 5
+        UNIT_TYPE_TO_INDEX[REMOVE] = 6
+        ALL_UNITS = [FILTER, ENCRYPTOR, DESTRUCTOR, PING, EMP, SCRAMBLER, REMOVE]
+        FIREWALL_TYPES = [FILTER, ENCRYPTOR, DESTRUCTOR]
+        INFORMATION_TYPES = [PING, EMP, SCRAMBLER]
+        
+        self.should = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        self.shouldnot = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+    
+    def restore_should(self):
+        self.should = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        
+    def restore_shouldnot(self):
+        self.shouldnot = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+    
+    def set_should(self, locations = [], val):
+        for x, y in locations:
+            self.should[x][y] = val
+    
+    def set_shouldnot(self, locations = [], val):
+        for x, y in locations:
+            self.shouldnot[x][y] = val
+        
     def __parse_state(self, state_line):
         """
         Fills in map based on the serialized game state so that self.game_map[x,y] is a list of GameUnits at that location.
@@ -158,7 +173,7 @@ class GameState:
         warnings.warn("Invalid unit {}".format(unit))
 
     #added by zzy
-    def get_front_defense_line(self, player_index = 1):
+    def get_defense_line(self, player_index = 1):
         dist = [[float('inf')] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
         from_which = [[None] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
         visited = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
@@ -207,10 +222,19 @@ class GameState:
         return line
             
     #added by zzy
-    def get_openings(self, player_index = 1):
-        defense_line = self.get_front_defense_line(player_index)
+    def get_openings(self, defense_line):
         return list(filter(lambda x: not self.contains_stationary_unit(x), defense_line))
     
+    def can_block_enemy_openings(self, openings):
+        return all(map(lambda loc: loc in self.game_map.get_row(self.HALF_ARENA), openings))
+        
+    def locs_block_enemy_openings(self):
+        openings = list(filter(lambda x: not self.contains_stationary_unit(x), self.game_map.get_row(14)))
+        return list(map(lambda x: (x[0], x[1]-1), openings))
+    
+    def opening_to_start(self, opening, target_edge):
+        pass
+        
     def submit_turn(self):
         """Submit and end your turn.
         Must be called at the end of your turn or the algo will hang.
@@ -337,10 +361,11 @@ class GameState:
         blocked = self.contains_stationary_unit(location) or (stationary and len(self.game_map[location[0],location[1]]) > 0)
         correct_territory = location[1] < self.HALF_ARENA
         on_edge = location in (self.game_map.get_edge_locations(self.game_map.BOTTOM_LEFT) + self.game_map.get_edge_locations(self.game_map.BOTTOM_RIGHT))
-
+        should = not self.shouldnot[location[0]][location[1]]
+        
         return (affordable and correct_territory and not blocked and
                 (stationary or on_edge) and
-                (not stationary or num == 1))
+                (not stationary or num == 1) and should)
 
     def attempt_spawn(self, unit_type, locations, num=1):
         """Attempts to spawn new units with the type given in the given locations.
@@ -381,6 +406,28 @@ class GameState:
                     warnings.warn("Could not spawn {} number {} at location {}. Location is blocked, invalid, or you don't have enough resources.".format(unit_type, i, location))
         return spawned_units
 
+    def revoke_spawn(self, unit_type, locations, num=1):
+        if unit_type not in ALL_UNITS:
+            self._invalid_unit(unit_type)
+            return
+        if num < 1:
+            return
+      
+        if type(locations[0]) == int:
+            locations = [locations]
+        revoked_units = 0
+        for x, y in locations:
+            item = (unit_type, x, y)
+            for i in range(num):
+                if is_stationary(unit_type) and item in self._build_stack:
+                    self._build_stack.remove(item)
+                elif not is_stationary(unit_type) and item in self._deploy_stack:
+                    self._deploy_stack.remove(item)
+                    revoked_units += 1
+                else:
+                    warnings.warn("Could not revoke {} number {} at location {}.".format(unit_type, i, (x,y)))
+        return revoked_units
+        
     def attempt_remove(self, locations):
         """Attempts to remove existing friendly firewalls in the given locations.
 
@@ -397,12 +444,14 @@ class GameState:
         for location in locations:
             if location[1] < self.HALF_ARENA and self.contains_stationary_unit(location):
                 x, y = map(int, location)
+                if self.should[x][y]:
+                    return
                 self._build_stack.append((REMOVE, x, y))
                 removed_units += 1
             else:
                 warnings.warn("Could not remove a unit from {}. Location has no firewall or is enemy territory.".format(location))
         return removed_units
-
+        
     def find_path_to_edge(self, start_location, target_edge):
         """Gets the path a unit at a given location would take
 
