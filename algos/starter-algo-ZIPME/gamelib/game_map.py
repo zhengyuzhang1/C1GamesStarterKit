@@ -105,7 +105,7 @@ class GameMap:
             row1 = 2 * self.HALF_ARENA - row - 1
         else:
             row1 = row
-        return map(lambda y: (row, y), range(self.HALF_ARENA-row1-1, self.HALF_ARENA+row1+1))
+        return map(lambda y: (y, row), range(self.HALF_ARENA-row1-1, self.HALF_ARENA+row1+1))
         
     def get_self_arena(self):
         locations = []

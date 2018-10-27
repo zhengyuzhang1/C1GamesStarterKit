@@ -209,15 +209,11 @@ class GameState:
         return list(filter(lambda x: not self.contains_stationary_unit(x), defense_line))
     
     def can_block_enemy_openings(self, openings):
-        return all(lambda loc: loc in self.game_map.get_row(self.HALF_ARENA), openings)
+        return all(map(lambda loc: loc in self.game_map.get_row(self.HALF_ARENA), openings))
         
     def locs_block_enemy_openings(self):
-        defense_line = self.get_defense_line()
-        openings = self.get_openings(defense_line)
-        if self.can_block_enemy_openings(openings):
-            return list(map(lambda x: (x[0]-1, x[1]), openings))
-        else:
-            return []
+        openings = list(filter(lambda x: not self.contains_stationary_unit(x), self.game_map.get_row(14)))
+        return list(map(lambda x: (x[0], x[1]-1), openings))
     
     def opening_to_start(self, opening, target_edge):
         pass
