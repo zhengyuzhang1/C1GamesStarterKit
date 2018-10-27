@@ -101,8 +101,24 @@ class GameMap:
         return bottom_half_check or top_half_check
     
     def get_row(self, row):
-        return filter(self.in_arena_bounds, map(lambda x: (x,row), range(self.ARENA_SIZE)))
+        if row >= self.HALF_ARENA:
+            row1 = 2 * self.HALF_ARENA - row - 1
+        else:
+            row1 = row
+        return map(lambda y: (row, y), range(self.HALF_ARENA-row1-1, self.HALF_ARENA+row1+1))
         
+    def get_self_arena(self):
+        locations = []
+        for row in range(self.HALF_ARENA):
+            locations += self.get_row(row)
+        return locations
+    
+    def get_enemy_arena(self):
+        locations = []
+        for row in range(self.HALF_ARENA, self.ARENA_SIZE):
+            locations += self.get_row(row)
+        return locations
+    
     def get_edge_locations(self, quadrant_description):
         """Takes in an edge description and returns a list of locations.
         

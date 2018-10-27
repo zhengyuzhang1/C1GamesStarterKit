@@ -44,6 +44,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.actions = [[],[]]
         self.stationary_units = [{}, {}]
         
+        #strategy flags
+        self.flag_block_and_final_attack = False
+        
 
     def on_game_start(self, config):
         """ 
@@ -77,12 +80,15 @@ class AlgoStrategy(gamelib.AlgoCore):
     def set_helper_map(self, config):
         self.helper_map = gamelib.GameMap(config)
         #if firewall is required for block, and so should not be removed in any case
-        self.helper_map.necessity = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        self.restore_necessity()
         self.helper_map.attack_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.damage_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.remove_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.breach_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.n_units_ever_spawned = [[[0] * 7 for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
+        
+    def restore_necessity(self):
+        self.helper_map.necessity = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
         
     def on_turn(self, turn_state):
         """
@@ -94,7 +100,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         
         self.pre_game_state = self.game_state
-        self.game_state = gamelib.GameState(self.config, turn_state)
+        self.game_state = gamelib.AdvancedGameState(self.config, turn_state)
         #if not first turn, parse last turn's action phase strings
         if self.pre_game_state is not None:
             self.parse_action_phase()          
@@ -177,20 +183,32 @@ class AlgoStrategy(gamelib.AlgoCore):
             gamelib.debug_write('neighbor is: [{0}, {1}]'.format(pos[0], pos[1]))   
             self.game_state.attempt_spawn(firewall_type, pos)
 
-    def remove_unattacked_and_undamaged_firewall(self, threshold_terms, locations = None):
+    def remove_not_necessary_firewall(self, locations = None):
         if locations is None:
-            locations = self.helper_map[self.HALF_ARENA * (1 + self.HALF_ARENA)]       
-        for location in locations:
-            if location[1] >= self.HALF_ARENA:
-                warnings.warn("Could not remove a unit from {}. Location is enemy territory.".format(location))
-                continue
-            if not self.game_state.contains_stationary_unit(location):
+            locations = self.helper_map.get_self_arena()
+        for x, y in locations:
+            if not self.helper_map.necessity[x][y]:
+                self.game_state.attempt_remove((x,y))
+            
+    def remove_unattacked_undamaged_not_necessary_firewall(self, threshold_terms, locations = None):
+        if locations is None:
+            locations = self.helper_map.get_self_arena()       
+        for x, y in locations:
+            if self.helper_map.necessity[x][y]:
                 #warnings.warn("Could not remove a unit from {}. Location has no firewall.".format(location))
                 continue
                 #current life of firewall on location:
             if self.game_state.turn_number - self.helper_map.attack_turn[-1] > threshold_terms and self.game_state.turn_number - self.helper_map.damage_turn[-1] > threshold_terms:
-                self.game_state.attempt_remove(location)
-
+                self.game_state.attempt_remove((x,y))
+        
+    def block_and_final_attack(self, locs):
+        self.restore_necessity()
+        for x, y in locs:
+            self.helper_map.necessity[x][y] = True
+        self.game_state.attempt_spawn(FILTER, locs)
+        self.remove_not_necessary_firewall
+        
+        
     def starter_algo(self, game_state):
 
         filters_positions_l1 = list(map(lambda x: [x, 13], range(1, self.ARENA_SIZE)))

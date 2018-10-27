@@ -1,5 +1,4 @@
 from .game_state import GameState, GameUnit
-from .unit_group import UnitGroup
 import sys
 import warnings
 
