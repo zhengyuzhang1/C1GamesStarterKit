@@ -83,22 +83,22 @@ class GameState:
         FIREWALL_TYPES = [FILTER, ENCRYPTOR, DESTRUCTOR]
         INFORMATION_TYPES = [PING, EMP, SCRAMBLER]
         
-        self.should = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
-        self.shouldnot = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        self.should_not_remove = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+        self.should_not_build = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
     
-    def restore_should(self):
-        self.should = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+    def restore_should_not_remove(self):
+        self.should_not_remove = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
         
-    def restore_shouldnot(self):
-        self.shouldnot = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
+    def restore_should_not_build(self):
+        self.should_not_build = [[False] * self.ARENA_SIZE for _ in range(self.ARENA_SIZE)]
     
-    def set_should(self, locations = [], val):
+    def set_should_not_remove(self, locations, val):
         for x, y in locations:
-            self.should[x][y] = val
+            self.should_not_remove[x][y] = val
     
-    def set_shouldnot(self, locations = [], val):
+    def set_should_not_build(self, locations, val):
         for x, y in locations:
-            self.shouldnot[x][y] = val
+            self.should_not_build[x][y] = val
         
     def __parse_state(self, state_line):
         """

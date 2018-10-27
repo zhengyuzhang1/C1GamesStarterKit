@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 class UnitGroup:
     
-    def __int__(self, unit_type, path, number = 1, attack = 0., breach = 0, selfdestruct_damage = 0.):
+    def __init__(self, unit_type, path, number = 1, attack = 0., breach = 0, selfdestruct_damage = 0.):
         self.number = number
         self.unit_type = unit_type
         self.path = path

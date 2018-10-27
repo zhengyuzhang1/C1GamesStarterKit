@@ -84,8 +84,6 @@ class Action:
     def single_player_event(self, event, player_id):
         return filter(lambda x: x[-1] == player_id, event)
    
-
- 
     def __parse_frames(self, game_state, helper_map, serialized_strings, player_index):
         """
         Fills in map based on the serialized game state so that self.game_map[x,y] is a list of GameUnits at that location.
@@ -98,11 +96,11 @@ class Action:
         if player_index == 0:
             STATS = "p1Stats"
             UNITS = "p1Units"
-            PLAYER_ID = "1"
+            PLAYER_ID = 1
         else:
             STATS = "p2Stats"
             UNITS = "p2Units"
-            PLAYER_ID = "2" 
+            PLAYER_ID = 2 
         self.health, cores, bits, time = map(float, spawn_frame[STATS])
         units = spawn_frame[UNITS]
         self.cores_used = cores - game_state._player_resources[player_index]["cores"]
@@ -122,7 +120,7 @@ class Action:
             if is_stationary(unit_type):
                 self.firewall_spawned[unit_type_id].append((x,y))
             elif unit_type == REMOVE:
-                helper_map.remove_turns[x][y].append(self.turn_number)
+                helper_map.remove_turn[x][y].append(self.turn_number)
                 for i in range(3):
                     for u2 in units[i]:
                         if [u2[0], u2[1]] == loc:
@@ -133,7 +131,7 @@ class Action:
                 else:
                     information_units_spawned[int(unit_type_id)-3][(x,y)].append(unit_id)
         for i in range(3):
-            for key, val in information_units_spawned[i]:
+            for key, val in information_units_spawned[i].items():
                 unit_group = UnitGroup(INFORMATION_TYPES[i], [key], len(val))
                 self.attacker_group_spawned[i].append(unit_group)
                 self.unit_id_to_unit_group.update(dict.fromkeys(val, unit_group))
@@ -172,9 +170,9 @@ class Action:
 
             for loc, damage, unit_type_id, unit_id, player_index in self.single_player_event(frame[EVENT][BREACH], PLAYER_ID):
                 unit_group = self.unit_id_to_unit_group[unit_id]
-                unit_group.add_breach(1)
+                unit_group.add_breach(damage)
                 x, y = map(int, loc)
-                helper_map.breach_turn[x][y].append(self.turn_number)
+                helper_map.breach_turn[x][y][self.turn_number] += damage
 
                 self.update_helper_map_priority_from_enemy_path(helper_map, unit_group, weight= 0.2)
 
@@ -188,7 +186,7 @@ class Action:
         for location in enemy_path:
             helper_map.priority[location[0]][location[1]] += weight
   
-    def update_helper_map_priority_from_attach_damage(self, helper_map, location, damage, weight= 0.2):
+    def update_helper_map_priority_from_attack_damage(self, helper_map, location, damage, weight= 0.2):
 
         helper_map.priority[location[0]][location[1]] += damage * weight
 

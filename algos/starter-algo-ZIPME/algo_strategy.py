@@ -5,7 +5,7 @@ import warnings
 import json
 from sys import maxsize
 from gamelib.game_state import is_stationary
-
+from collections import defaultdict
 
 """
 Most of the algo code you write will be in this file unless you create new
@@ -44,6 +44,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.actions = [[],[]]
         self.stationary_units = [{}, {}]
         self.flag_final_attack = False
+        self.flag_save_bit = False
         
         #strategy flags
         self.locs_block_and_final_attack = []
@@ -84,7 +85,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.helper_map.attack_turn = [[{} for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.damage_turn = [[{} for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.remove_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
-        self.helper_map.breach_turn = [[[] for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
+        self.helper_map.breach_turn = [[defaultdict(int) for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.n_units_ever_spawned = [[[0] * 7 for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
         self.helper_map.priority = [[0 for _ in range(self.ARENA_SIZE)] for _ in range(self.ARENA_SIZE)]
          
@@ -109,7 +110,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.game_state = gamelib.AdvancedGameState(self.config, turn_state)
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(self.game_state.turn_number))
         #self.game_state.suppress_warnings(True)  # Uncomment this line to suppress warnings.        
-
+        
         self.starter_algo(self.game_state)        
         
         self.game_state.submit_turn()
@@ -180,7 +181,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         return False
 
     def strengthen_around(self, firewall_type, location):
-        for pos in self.helper_map.get_locations_in_range(location, 1.5): 
+        for pos in self.helper_map.get_locations_in_range(location, 1): 
             gamelib.debug_write('neighbor is: [{0}, {1}]'.format(pos[0], pos[1]))   
             self.game_state.attempt_spawn(firewall_type, pos)
            
@@ -194,26 +195,30 @@ class AlgoStrategy(gamelib.AlgoCore):
             if self.game_state.turn_number - last_attack_turn > threshold_terms and self.game_state.turn_number - last_damage_turn > threshold_terms:
                 self.game_state.attempt_remove((x,y))
         
+    def switch_opening(self, ):
+        self.flag_save_bit = True
+        
+        
     def block_and_final_attack(self, locs, scrambler_number, ping_number):
         l = []
         for loc in locs:
-            neighbor = self.helper_map.get_locations_in_range(loc, 1.5) 
+            neighbor = self.helper_map.get_locations_in_range(loc, 1) 
             l += [x for x in neighbor if x not in locs]
-        locs += l
+        l = locs + l
         
         wall_locs = list(map(lambda x: (x, x-12), range(13, 26)))
         attack_path = list(map(lambda x: (x, x-13), range(13, 27)))
         ping_loc = [[13, 0]]
         scrambler_loc = [[24, 10]]       
         
-        weak_corner = self.get_weak_corner()
-        if weak_corner == "left":
+        corner_attackers = self.get_corner_attacker()
+        if corner_attackers[0] < corner_attackers[1]:
             for loc1 in [wall_locs, attack_path, ping_loc, scrambler_loc]:
                 loc1 = self.helper_map.get_symmetry(loc1)
 
-        filter_locs = locs + wall_locs
-        self.game_state.restore_should()
-        self.game_state.set_should(filter_locs)
+        filter_locs = l + wall_locs
+        self.game_state.restore_should_not_remove()
+        self.game_state.set_should_not_remove(filter_locs, True)
         
         self.game_state.attempt_spawn(FILTER, filter_locs)
         ping_loc = [13, 0]
@@ -223,74 +228,50 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.game_state.attempt_spawn(PING, ping_loc, ping_number)
             self.game_state.attempt_spawn(SCRAMBLER, scrambler_loc, scrambler_number)
             self.flag_final_attack = False
-            self.game_state.restore_should()
-            self.game_state.restore_shouldnot()
+            self.game_state.restore_should_not_remove()
+            self.game_state.restore_should_not_build()
         
         if self.game_state.project_future_bits() >= scrambler_number + ping_number and all(map(lambda x:self.game_state.contains_stationary_unit(x) or (FILTER, int(x[0]), int(x[1])) in self.game_state._build_stack, wall_locs)):
-            self.clear_path(attack_path)
+            self.clear_locations(attack_path)
             self.flag_final_attack = True                  
     
-    def clear_path(self, locations):
-        self.game_state.set_should(locations, False)
+    def clear_locations(self, locations):
+        self.game_state.set_should_not_remove(locations, False)
         self.game_state.attempt_remove(locations)
-        self.game_state.set_shouldnot(locations)
+        self.game_state.set_should_not_build(locations, True)
         
-    def get_weak_corner(self):
-        n_attackers = [len(self.game_state.get_attackers(corner)) for corner in [[0, 14], [27, 14]]]
-        if n_attackers[0] < n_attackers[1]:
-            return "left"
-        else:
-            return "right"
+    def undo_clear_locations(self, locations):
+        self.game_state.set_should_not_remove(locations, True)
+        self.game_state.set_should_not_build(locations, False)
+        
+    def get_corner_attacker(self):
+        return [len(self.game_state.get_attackers(corner, 0)) for corner in [[0, 14], [27, 14]]] 
+        
+    def try_switch_opening(self, ):
         
     def starter_algo(self, game_state):
-
+        
+        if self.game_state.turn_number == 0:
+            self.init_starter_algo()
+        
         self.locs_block_and_final_attack = self.game_state.locs_block_enemy_openings()
         if 0 < len(self.locs_block_and_final_attack) < 6:
             gamelib.debug_write("openings:{}".format(self.locs_block_and_final_attack))
-            self.block_and_final_attack(self.locs_block_and_final_attack, 3, 33)
+            self.block_and_final_attack(self.locs_block_and_final_attack, 3, 32)
             return      
         
-        #self.initial_firewall_setup(game_state)
-        '''
-        l0_l1_filters_positions = [[27, 13], [26, 12]]
-
-        l3_filters_postions = [[ 6, 11],[ 7, 11],[ 9, 11],[ 10, 11],[ 11, 11],[ 13, 11],[ 14, 11],[15, 11],[ 16, 11],[ 17, 11],[ 18, 11],[19, 11],[ 20, 11],[ 21, 11],[ 22, 11],[23,11],[ 24, 11],[ 25, 11]]
-
-        l4_l5_filters_positions = [[ 3, 10],[ 4, 9],[ 5, 9],[ 6, 9],[ 7, 9],[ 8, 9]]
-
-        l2_destructors_positions = [[ 2 ,12]]
-
-        l1_filters_positions = [[ 1, 13],[ 2, 13],[ 3, 13],[ 4, 13],[ 5, 13],[ 6, 13],[ 7, 13],[ 8, 13],[ 9, 13],[ 10, 13],[ 11, 13],[ 12, 13],[ 13, 13],[ 14, 13],[ 15, 13],[ 16, 13],[ 17, 13],[ 18, 13],[ 19, 13],[ 20, 13],[ 21, 13],[ 22, 13],[ 23, 13],[ 24, 13]]
-
-        # l5_filters_positions = [[ 9, 9],[ 10, 9],[ 11, 9],[ 12, 9],[ 13, 9],[ 14, 9],[ 15, 9],[ 16, 9],[ 17, 9],[ 18, 9],[ 19, 9],[ 20, 9],[ 21, 9],[ 22, 9],[ 23, 9]]
-
-        for position in l0_l1_filters_positions:
-            self.restore_firewall(game_state, FILTER, position)
-
-        for position in l3_filters_postions:
-            self.restore_firewall(game_state, FILTER, position)
-
-        for position in l4_l5_filters_positions:
-            self.restore_firewall(game_state, FILTER, position)
-
-        for position in l2_destructors_positions:
-            self.restore_firewall(game_state, DESTRUCTOR, position)
-
-        for position in l1_filters_positions:
-            self.restore_firewall(game_state, FILTER, position)
-        '''
         destructor_list_0 = [ [0, 13], [26, 13], [3, 11], [7, 11], [11, 11], [16, 11], [20, 11], [23, 11]]
         filter_list_0 = [[27, 13]]
 
         destructor_list_1 = [[13, 11], [2, 12], [25, 13]]
-        filter_list_1 = [[1, 13], [3, 12], [2, 11], [5,11], [6, 11], [8, 11], [9, 11], [10,11], [12,11], [14,11], [15,11], [17,11], [18,11], [19,11], [21,11], [22,11], [24,11], [25,11], [26, 12]]
+        filter_list_1 = [[1, 13], [3, 12], [5,11], [6, 11], [8, 11], [9, 11], [10,11], [12,11], [14,11], [15,11], [17,11], [18,11], [19,11], [21,11], [22,11], [24,11], [25,11], [26, 12]]
 
-        filter_list_2 = [ [2, 13], [3, 13], [4, 13], [5, 13], [6, 13], [7, 13], [8, 13], [9, 13], [10, 13], [11, 13], [12, 13], [13,13], [14,13], [15, 13], [16, 13], [17, 13], [18, 13], [19, 13], [20, 13], [21, 13], [22, 13], [23, 13] ]
-        destructor_list_2 = [ [1, 12], [2, 11] ]
+        filter_list_2 = [ [2, 13], [3, 13], [4, 13], [5, 13], [6, 13], [7, 13], [8, 13], [9, 13], [10, 13], [11, 13], [12, 13], [13,13], [14,13], [15, 13], [16, 13], [17, 13], [18, 13], [19, 13], [20, 13], [21, 13], [22, 13], [23, 13], [24, 13] ]
+        destructor_list_2 = [ [1, 12] ]
 
         filter_list_3 = [[3, 10], [4, 9], [5, 9], [6, 9], [7, 9], [8, 9], [9, 9]]
-
-
+        
+        self.try_switch_opening()
         
         for location in self.rank_locations_priority(destructor_list_0):
             self.game_state.attempt_spawn(DESTRUCTOR, location, num=1)
@@ -304,6 +285,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         for location in self.rank_locations_priority(filter_list_1):
             self.game_state.attempt_spawn(FILTER, location, num=1)
 
+        self.game_state.attempt_spawn(ENCRYPTOR, [5, 8], 1)
+        
         for location in self.rank_locations_priority(destructor_list_2):
             self.game_state.attempt_spawn(DESTRUCTOR, location, num=1)
 
@@ -316,30 +299,24 @@ class AlgoStrategy(gamelib.AlgoCore):
         for location in [[22, 9], [5, 8], [23, 9]]:
             self.game_state.attempt_spawn(ENCRYPTOR, location, num=1)
 
- 
-
-  
-        self.deploy_attackers(game_state)
+        if not self.flag_save_bit:
+            self.deploy_attackers()
         
+    def init_starter_algo(self):
+        self.openings = [[4, 13], [24, 13]]
+        self.init_opening_index = 1
+        self.clear_locations(self.openings[self.init_opening_index])
 
-    def restore_firewall(self, game_state, firewall, position):
-        if game_state.can_spawn(firewall, position):
-            game_state.attempt_spawn(firewall, position)
-
-    def deploy_attackers(self, game_state):
+    def deploy_attackers(self):
         EMP_position = [24, 10] # Try [5, 8]?
         
         #if game_state.can_spawn(EMP, EMP_position, 1) and game_state.turn_number % 2 == 0:
 
-
-        if game_state.turn_number ==0:
-            while game_state.can_spawn(PING, [16, 2], 1):
-                game_state.attempt_spawn(PING, [16, 2], 1)
+        if self.game_state.turn_number == 0:
+            ping_locs = [16, 2]
+            self.game_state.attempt_spawn(PING, ping_locs, self.game_state.number_affordable(PING))
         else:
-            while game_state.can_spawn(EMP, EMP_position, 1):
-                game_state.attempt_spawn(EMP, EMP_position, 1)
-
-
+            self.game_state.attempt_spawn(EMP, EMP_position, self.game_state.number_affordable(EMP))
 
 
     def initial_firewall_setup(self, game_state):
